@@ -1,0 +1,42 @@
+# GNU/Linux LimeRoot ip_shapper
+# A script to shape bandwidth per IP address
+# GPL v2
+# www.limeroot.org
+# Author: Daniel Torres, daniel@limeroot.org.
+# Copyright © 2013 
+
+TC='/sbin/tc'
+TC_QDISC="${TC} qdisc add dev "
+TC_CLASS="${TC} class add dev "
+TC_FILTER="${TC} filter add dev "
+CEIL=2000
+RATE=1
+INDEX=2
+
+tc qdisc del root dev eth0
+
+# LAN NIC HANDLE
+$TC_QDISC eth0 root handle 1: htb default 15
+
+# LAN NIC LIMITS
+$TC_CLASS eth0 parent 1: classid 1:1 htb rate ${CEIL}kbit ceil ${CEIL}kbit
+
+# LAN NIC LIMITS SFQ
+$TC_QDISC eth0 parent 1:1 handle 2: sfq perturb 10
+
+
+function add_ip(){
+    $TC_CLASS eth0 parent 1:1 classid 1:${INDEX} htb rate ${RATE}kbit ceil ${CEIL}kbit prio 0
+    $TC_QDISC eth0 parent 1:$INDEX handle ${INDEX}: sfq perturb 10
+    $TC_FILTER eth0 parent 1:1 protocol ip u32 match ip dst ${1}/32 flowid 1:${INDEX}
+}
+
+
+COUNT=$(cat ips | wc -l)
+RATE=$((CEIL/COUNT))
+cat ips | while read ip; do
+    ((INDEX++))
+    if [ ! -z $ip ]; then
+        add_ip $ip
+    fi
+done
